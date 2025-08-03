@@ -235,19 +235,25 @@ local function update_filter()
 end
 
 M.toggle_filter = function()
-  local buf = get_kulala_buffer()
-  local row = 4
+  vim.ui.input({ prompt = "Enter JQ Filter: " }, function(filter)
+    if not filter or filter == "" then return end
 
-  if vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]:find("JQ Filter") then
-    return vim.api.nvim_buf_set_lines(buf, row - 1, row + 1, false, {})
-  end
-
-  local filter = { "JQ Filter: " .. (get_current_response().filter or ""), "" }
-
-  vim.api.nvim_buf_set_lines(buf, row, row, false, filter)
-
-  UI_utils.highlight_range(buf, 0, { row, 0 }, { row, 12 }, "Question")
-  UI_utils.highlight_range(buf, 0, { row, 10 }, { row, -1 }, "Special")
+    Ext_processing.jq(filter, get_current_response())
+    M.show_body()
+  end)
+  -- local buf = get_kulala_buffer()
+  -- local row = 4
+  --
+  -- if vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]:find("JQ Filter") then
+  --   return vim.api.nvim_buf_set_lines(buf, row - 1, row + 1, false, {})
+  -- end
+  --
+  -- local filter = { "JQ Filter: " .. (get_current_response().filter or ""), "" }
+  --
+  -- vim.api.nvim_buf_set_lines(buf, row, row, false, filter)
+  --
+  -- UI_utils.highlight_range(buf, 0, { row, 0 }, { row, 12 }, "Question")
+  -- UI_utils.highlight_range(buf, 0, { row, 10 }, { row, -1 }, "Special")
 end
 
 local function jump_to_response()
