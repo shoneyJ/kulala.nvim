@@ -199,6 +199,12 @@ M.default_kulala_keymaps = {
       require("kulala.ui").toggle_filter()
     end,
   },
+  ["Show Grep"] = {
+    "G",
+    function()
+      require("kulala.ui").toggle_grep()
+    end,
+  },
   ["Next response"] = {
     "]",
     function()

@@ -69,4 +69,19 @@ M.jq = function(filter, response)
   response.filter = filter
 end
 
+M.grep = function(filter, response)
+  if vim.tbl_keys(response.json) == 0 then return end
+
+  local result = Shell.run(
+    { "grepjson", "--pattern", filter },
+    { sync = true, stdin = response.body_raw, err_msg = "Failed to grep with", abort_on_stderr = true }
+  )
+
+  if not result or result.stdout == "" then return end
+
+  response.body = result.stdout
+  response.json = Json.parse(result.stdout, { verbose = true }) or response.json
+  response.filter = filter
+end
+
 return M

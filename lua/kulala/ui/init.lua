@@ -233,7 +233,14 @@ local function update_filter()
   Ext_processing.jq(filter, get_current_response())
   M.show_body()
 end
+M.toggle_grep = function()
+  vim.ui.input({ prompt = "Grep With: " }, function(filter)
+    if not filter or filter == "" then return end
 
+    Ext_processing.grep_json(filter, get_current_response())
+    M.show_body()
+  end)
+end
 M.toggle_filter = function()
   vim.ui.input({ prompt = "Enter JQ Filter: " }, function(filter)
     if not filter or filter == "" then return end
