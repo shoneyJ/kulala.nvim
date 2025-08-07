@@ -237,7 +237,7 @@ M.toggle_grep = function()
   vim.ui.input({ prompt = "Grep With: " }, function(filter)
     if not filter or filter == "" then return end
 
-    Ext_processing.grep_json(filter, get_current_response())
+    Ext_processing.grep(filter, get_current_response())
     M.show_body()
   end)
 end
