@@ -51,6 +51,7 @@ local M = {
         and { "prettier", "--stdin-filepath", "graphql", "--parser", "graphql" },
       pathresolver = nil,
     },
+    ["application/graphql-response+json"] = "application/json",
     ["application/xml"] = {
       ft = "xml",
       formatter = vim.fn.executable("xmllint") == 1 and { "xmllint", "--format", "-" },
@@ -62,6 +63,9 @@ local M = {
       pathresolver = nil,
     },
   },
+
+  -- format json response when redirecting to file
+  format_json_on_redirect = true,
 
   scripts = {
     -- Resolves "NODE_PATH" environment variable for node scripts. Defaults to the first "node_modules" directory found upwards from "script_file_dir".
@@ -92,8 +96,8 @@ local M = {
     icons = {
       inlay = {
         loading = "⏳",
-        done = "✅",
-        error = "❌",
+        done = "✔",
+        error = "✘",
       },
       lualine = "🐼",
       textHighlight = "WarningMsg", -- highlight group for request elapsed time
@@ -106,12 +110,17 @@ local M = {
       ["@character.special.kulala_http"] = "Special",
       ["@operator.kulala_http"] = "Special",
       ["@variable.kulala_http"] = "String",
+      ["@redirect_path.kulala_http"] = "Number",
+      ["@external_body_path.kulala_http"] = "String",
     },
 
     -- enable/disable request summary in the output window
     show_request_summary = true,
     -- disable notifications of script output
     disable_script_print_output = false,
+
+    -- do not show responses over maximum size, in bytes
+    max_response_size = 32768,
 
     report = {
       -- possible values: true | false | "on_error"
@@ -181,6 +190,7 @@ local M = {
         commands = false,
         json = true,
       },
+      quote_json_variables = true, -- add quotes around {{variable}} in JSON bodies
     },
 
     on_attach = nil, -- function called when Kulala LSP attaches to the buffer

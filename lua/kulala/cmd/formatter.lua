@@ -13,14 +13,15 @@ local function capitalize(str)
   return str:lower():gsub("^%l", string.upper):gsub("%-%l", string.upper)
 end
 
-local function trim(str)
-  str = str or ""
-  str = str:gsub("^%s+", ""):gsub("%s+$", ""):gsub("[ \t]+", " ")
-  return str
+local function trim(str, collapse)
+  str = (str or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  return collapse and str:gsub("[ \t]+", " ") or str
 end
 
-local function get_text(node)
-  return trim(ts.get_node_text(node, buf))
+local function get_text(node, collapse)
+  collapse = collapse == nil and true or collapse
+  local text = ts.get_node_text(node, buf)
+  return trim(text, collapse) or text
 end
 
 local function get_fields(node, names)
@@ -267,62 +268,106 @@ format_rules = {
   end,
 
   ["raw_body"] = function(node)
-    local body = get_text(node)
-    current_section().request.body = body
+    local body = get_text(node, false)
+
+    local request = current_section().request
+    request.body = #request.body > 0 and (request.body .. "\n\n" .. body) or body
+
     return body
   end,
 
   ["multipart_form_data"] = function(node)
-    local body = get_text(node)
-    current_section().request.body = body
+    local body = get_text(node, false)
+
+    local request = current_section().request
+    request.body = #request.body > 0 and (request.body .. "\n\n" .. body) or body
+
     return body
   end,
 
   ["xml_body"] = function(node)
-    local body = get_text(node)
-    local formatted = Formatter.xml(body) or body
+    local body = get_text(node, false)
 
-    current_section().request.body = formatted:gsub("\n*$", "")
+    local formatted = Formatter.xml(body) or body
+    formatted = formatted:gsub("\n*$", "")
+
+    local request = current_section().request
+    request.body = #request.body > 0 and (request.body .. "\n\n" .. formatted) or formatted
+
     return formatted
   end,
 
   ["json_body"] = function(node)
-    local json = get_text(node)
-    local formatted = Formatter.json(json, { sort = format_opts.sort.json }) or json
+    local json = get_text(node, false)
 
-    current_section().request.body = formatted:gsub("\n*$", "")
+    if format_opts.quote_json_variables then
+      local lcurly, rcurly = "X7BX7B", "X7DX7D"
+
+      local encoded_braces = json:gsub('%b""', function(quoted_string)
+        return quoted_string:gsub("{{", lcurly):gsub("}}", rcurly)
+      end)
+
+      local quoted_variables = encoded_braces:gsub("{{.-}}", '"%1"')
+      json = quoted_variables:gsub(lcurly, "{{"):gsub(rcurly, "}}")
+    end
+
+    local formatted = Formatter.json(json, { sort = format_opts.sort.json }) or json
+    formatted = formatted:gsub("\n*$", "")
+
+    local request = current_section().request
+    request.body = #request.body > 0 and (request.body .. "\n\n" .. formatted) or formatted
+
     return formatted
   end,
 
   ["graphql_body"] = function(node)
-    local body = get_text(node)
-    local formatted = Formatter.graphql(body, { sort = format_opts.sort.json }) or body
+    format_children(node)
+  end,
 
-    current_section().request.body = formatted:gsub("\n*$", "")
+  ["graphql_data"] = function(node)
+    local body = get_text(node, false)
+
+    local formatted = Formatter.graphql(body, { sort = format_opts.sort.json }) or body
+    formatted = formatted:gsub("\n*$", "")
+
+    local request = current_section().request
+    request.body = #request.body > 0 and (request.body .. "\n\n" .. formatted) or formatted
+
     return formatted
   end,
 
   ["external_body"] = function(node)
     local formatted = get_text(node)
 
-    current_section().request.body = formatted
+    local request = current_section().request
+    request.body = #request.body > 0 and (request.body .. "\n\n" .. formatted) or formatted
+
     return formatted
   end,
 
   ["pre_request_script"] = function(node)
-    local script = get_text(node)
-    script = script:gsub("\n", "\n  "):gsub("\n  %%}", "\n%%}")
+    local script = get_text(node, false)
+    script = script:gsub("\n([^\n%s])", "\n  %1"):gsub("\n%s+%%}", "\n%%}")
 
     table.insert(current_section().request.pre_request_script, script)
     return script
   end,
 
   ["res_handler_script"] = function(node)
-    local script = get_text(node)
-    script = script:gsub("\n", "\n  "):gsub("\n  %%}", "\n%%}")
+    local script = get_text(node, false)
+    script = script:gsub("\n([^\n%s])", "\n  %1"):gsub("\n%s+%%}", "\n%%}")
 
     table.insert(current_section().request.res_handler_script, script)
     return script
+  end,
+
+  ["res_redirect"] = function(node)
+    local redirect = get_text(node)
+
+    local request = current_section().request
+    request.body = #request.body > 0 and (request.body .. "\n\n" .. redirect) or redirect
+
+    return redirect
   end,
 }
 

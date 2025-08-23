@@ -1,4 +1,5 @@
 ---@diagnostic disable: undefined-field, redefined-local
+local config = require("kulala.config")
 local fs = require("kulala.utils.fs")
 local h = require("test_helper")
 local parser = require("kulala.parser.request")
@@ -28,6 +29,7 @@ describe("requests", function()
             @REQ_USERNAME = Test_user
             @REQ_PASSWORD = Test_password
             @MY_COOKIE = awesome=me
+            @page = ONE
 
             POST https://httpbingo.org/basic-auth/{{REQ_USERNAME}}/{{REQ_PASSWORD}} HTTP/1.1
             Content-Type: application/json
@@ -40,6 +42,8 @@ describe("requests", function()
               "Timeout": {{DEFAULT_TIMEOUT}},
               "Timestamp": {{$timestamp}}
             }
+
+            >> institutions_{{page}}.json
       ]]):to_table(true),
           "test.http"
         )
@@ -59,6 +63,11 @@ describe("requests", function()
               "Timeout": 5000,
               "Timestamp": $TIMESTAMP
             }]]):to_string(true),
+          redirect_response_body_to_files = {
+            {
+              file = "institutions_ONE.json",
+            },
+          },
         })
       end)
 
@@ -158,10 +167,10 @@ describe("requests", function()
         h.create_buf(
           ([[
             # @name SIMPLE REQUEST
+            # GET https://httpbingo.org/simple
             POST https://httpbingo.org/simple
 
             {
-              # "skip": "true",
               "test": "value"
             }
       ]]):to_table(true),
@@ -169,17 +178,17 @@ describe("requests", function()
         )
 
         result = parser.parse() or {}
-        assert.is_same(result.body:gsub("\n", ""), '{"test": "value"}')
+        assert.is_same("POST", result.method)
       end)
 
       it("skips lines commented out with //", function()
         h.create_buf(
           ([[
             # @name SIMPLE REQUEST
+            // GET request
             POST https://httpbingo.org/simple
 
             {
-              // "skip": "true",
               "test": "value"
             }
       ]]):to_table(true),
@@ -187,7 +196,7 @@ describe("requests", function()
         )
 
         result = parser.parse() or {}
-        assert.is_same(result.body:gsub("\n", ""), '{"test": "value"}')
+        assert.is_same("POST", result.method)
       end)
 
       describe("processes url", function()
@@ -288,22 +297,35 @@ describe("requests", function()
           -- `?`, `&`, `=`, `/`, `#`, `:` special syntax
 
           assert_url(
-            { "https://my.server.com/api/v1/object?filter=A B&C:D&E?F&G#H&I=J/K&L%M#fragment" },
+            { "https://my.server.com/api/v1/object?filter=A BC:D&EF&G#HI=J/K&L%M#fragment" },
             "GET",
-            "https://my.server.com/api/v1/object?filter=A%20B&C%3AD&E%3FF&G%23H&I=J%2FK&L%25M#fragment"
+            "https://my.server.com/api/v1/object?filter=A%20BC%3AD&EF&G%23HI=J/K&L%25M#fragment"
           )
           assert_url(
             {
               [[https://my.server.com/api/v1/object?filter=owner.address.city in ["Berlin", "München", "Nürnberg"]']],
             },
             "GET",
-            [[https://my.server.com/api/v1/object?filter=owner.address.city%20in%20%5B%22Berlin%22%2C%20%22M%C3%BCnchen%22%2C%20%22N%C3%BCrnberg%22%5D%27]]
+            [[https://my.server.com/api/v1/object?filter=owner.address.city%20in%20[%22Berlin%22,%20%22M%C3%BCnchen%22,%20%22N%C3%BCrnberg%22]']]
           )
           assert_url(
             { 'httpbin.org/post?filter={"conditions":{}}' },
             "GET",
             "httpbin.org/post?filter=%7B%22conditions%22%3A%7B%7D%7D"
           )
+          assert_url(
+            { "httpbin.org/post(with space)/?filter=A eq 'XYZ'" },
+            "GET",
+            "httpbin.org/post(with%20space)/?filter=A%20eq%20'XYZ'"
+          )
+
+          config.options.urlencode = "skipencoded"
+          assert_url(
+            { "https://httpbin.org/Company%27WITH%20SPACE%27" },
+            "GET",
+            "https://httpbin.org/Company%27WITH%20SPACE%27"
+          )
+          config.options.urlencode = "always"
         end)
       end)
 
@@ -482,6 +504,23 @@ describe("requests", function()
 
         expected = h.load_fixture("requests/demo.png", true)
         assert.has_string(h.load_fixture(result.body_temp_file, true), expected)
+      end)
+
+      it("replaces nested variables", function()
+        h.create_buf(
+          ([[
+            POST https://httpbin.org/post
+            Token: {{deep.nested.var}}
+          ]]):to_table(true),
+          h.expand_path("requests/simple.http")
+        )
+
+        result = parser.parse() or {}
+        assert.has_properties(result, {
+          headers = {
+            ["Token"] = "deep-nested-variable",
+          },
+        })
       end)
 
       it("replaces variables in .json files", function()

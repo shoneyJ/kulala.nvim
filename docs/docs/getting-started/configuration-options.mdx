@@ -448,6 +448,12 @@ Generate a bug report on error.
 
 Default: `false`
 
+### format_json_on_redirect
+
+Format json response when redirecting to file
+
+Default: `true`
+
 ## Scripts
 
 ### scripts.node_path_resolver
@@ -531,8 +537,8 @@ Example:
         width = 80,
         height = 20,
         split = "vertical",
-        bo = { foldmethod = "indent" }, -- buffer options
-        wo = { number = true, wrap = true }, -- window options
+        bo = { number = true, wrap = true }, -- buffer options
+        wo = { foldmethod = "indent" }, -- window options
       },
     },
   },
@@ -777,6 +783,12 @@ Example:
 }
 ```
 
+### ui.max_response_size
+
+Do not show responses over maximum size, in bytes
+
+Default: `32000`
+
 ### ui.show_request_summary
 
 Enable/disable request summary in the output window.
@@ -940,6 +952,7 @@ Function called when Kulala LSP attaches to the buffer
         commands = false,
         json = true,
       },
+      quote_json_variables = true, -- add quotes around {{variable}} in JSON bodies
     },
     on_attach = function(client, bufnr)
       -- custom on_attach function
