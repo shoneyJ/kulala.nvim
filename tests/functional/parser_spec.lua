@@ -306,7 +306,7 @@ describe("requests", function()
               [[https://my.server.com/api/v1/object?filter=owner.address.city in ["Berlin", "München", "Nürnberg"]']],
             },
             "GET",
-            [[https://my.server.com/api/v1/object?filter=owner.address.city%20in%20[%22Berlin%22,%20%22M%C3%BCnchen%22,%20%22N%C3%BCrnberg%22]']]
+            [[https://my.server.com/api/v1/object?filter=owner.address.city%20in%20%5B%22Berlin%22,%20%22M%C3%BCnchen%22,%20%22N%C3%BCrnberg%22%5D']]
           )
           assert_url(
             { 'httpbin.org/post?filter={"conditions":{}}' },
@@ -351,6 +351,33 @@ describe("requests", function()
           ["Origin"] = "https://httpbingo.org",
           ["Empty-Header"] = "",
         })
+      end)
+
+      it("processes auth headers", function()
+        local credentials = {
+          "myuser:mypassword",
+          "my user:mypassword",
+          "myuser:my password",
+        }
+
+        vim.iter(credentials):each(function(cred)
+          h.create_buf(
+            ([[
+            POST https://httpbingo.org/simple
+            content-type: application/json
+            Authorization: Basic %s
+          ]]):format(cred):to_table(true),
+            h.expand_path("requests/simple.http")
+          )
+
+          result = parser.parse() or {}
+
+          assert.has_properties(result.headers, { ["Authorization"] = nil })
+          assert.has_string(result.cmd, "-u")
+          assert.has_string(result.cmd, cred)
+
+          h.delete_all_bufs()
+        end)
       end)
 
       it("sets headers from http-client", function()

@@ -141,7 +141,7 @@ local function modify_grpc_response(response)
 
   response.body_raw = response.stats
   response.stats = ""
-  response.headers = "Content-Type: application/json"
+  response.headers = response.errors == "" and "Content-Type: application/json" or "Content-Type: kulala/grpc_error"
 
   return response
 end
@@ -178,8 +178,9 @@ end
 
 local function get_body()
   local max_size = CONFIG.get().ui.max_response_size
+
   if vim.fn.getfsize(GLOBALS.BODY_FILE) > max_size then
-    FS.write_file(GLOBALS.HEADERS_FILE, "Content-Type: text/plain", true)
+    FS.write_file(GLOBALS.HEADERS_FILE, "Content-Type: " .. "text/plain", true)
     return "The size of response is > " .. max_size / 1024 .. "Kb.\nPath to response: " .. GLOBALS.BODY_FILE
   else
     return FS.read_file(GLOBALS.BODY_FILE) or ""
@@ -226,6 +227,7 @@ local function save_response(request_status, parsed_request)
     assert_status = true,
     file = parsed_request.file or "",
     buf_name = vim.fn.bufname(buf),
+
     line = line,
     buf = buf,
   }
@@ -234,9 +236,11 @@ local function save_response(request_status, parsed_request)
   response = set_request_stats(response)
 
   response.body = response.body_raw
-  response.body = #response.body == 0 and "No response body (check Verbose output)" or response.body
   response.json = Json.parse(response.body) or {}
   response.errors = inject_payload(response.errors, parsed_request)
+
+  if #response.body == 0 and response.method ~= "GRPC" then response.headers = "Content-Type: text/plain" end
+  if #response.body == 0 then response.body = "No response body (check Verbose output)" end
 
   table.insert(responses, response)
 
@@ -303,10 +307,34 @@ local function received_unbffured(request, response)
   return unbuffered and response:find("Connected") and FS.file_exists(GLOBALS.BODY_FILE)
 end
 
-local function parse_request(requests, request, variables)
+local function process_pre_request_commands(request)
   if not process_prompt_vars(request) then
     return Logger.warn("Prompt failed. Skipping this and all following requests.")
   end
+
+  local int_meta_processors = {
+    ["delay"] = "delay",
+  }
+
+  local ext_meta_processors = {
+    ["stdin-cmd-pre"] = "stdin_cmd",
+    ["env-stdin-cmd-pre"] = "env_stdin_cmd",
+  }
+
+  local processor
+  for _, metadata in ipairs(request.metadata) do
+    processor = int_meta_processors[metadata.name]
+    _ = processor and INT_PROCESSING[processor](metadata.value, response)
+  end
+
+  for _, metadata in ipairs(request.metadata) do
+    processor = ext_meta_processors[metadata.name]
+    _ = processor and EXT_PROCESSING[processor](metadata.value, response)
+  end
+end
+
+local function parse_request(requests, request, variables)
+  process_pre_request_commands(request)
 
   local parsed_request, status = REQUEST_PARSER.parse(requests, variables, request)
   if not parsed_request then
@@ -386,6 +414,20 @@ function process_request(requests, request, variables, callback)
   end)
 end
 
+---@param request DocumentRequest
+---@return boolean
+local function execute_before_request(request)
+  local before_request = CONFIG.get().before_request
+  if not before_request then return true end
+
+  if type(before_request) == "function" then
+    return before_request(request)
+  else
+    UI_utils.highlight_request(request)
+    return true
+  end
+end
+
 ---Parses and executes DocumentRequest/s:
 ---if requests is nil then it parses the current document
 ---if line_nr is nil then runs the first request in the list
@@ -411,9 +453,10 @@ M.run_parser = function(requests, variables, line_nr, callback)
     INLAY.show(DB.current_buffer, "loading", request.show_icon_line_number)
 
     M.queue:add(function()
-      UI_utils.highlight_request(request)
-      initialize()
-      process_request(requests, request, variables, callback)
+      if execute_before_request(request) then
+        initialize()
+        process_request(requests, request, variables, callback)
+      end
     end)
   end
 

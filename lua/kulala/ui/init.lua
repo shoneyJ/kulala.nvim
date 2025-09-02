@@ -207,15 +207,16 @@ local function show(contents, filetype, mode)
   show_progress()
 end
 
-local function format_body()
+local function format_body(view)
   local headers = get_current_response().headers
   local body = get_current_response().body
-  local contenttype = INT_PROCESSING.get_config_contenttype(headers)
+
+  local contenttype = INT_PROCESSING.get_config_contenttype(headers, view)
   local filetype
 
   if body and contenttype.formatter then
-    body = FORMATTER.format(contenttype.formatter, body, { verbose = false })
     filetype = contenttype.ft
+    body = FORMATTER.format(filetype, contenttype.formatter, body, { verbose = false })
   end
 
   return body, filetype or contenttype.ft
@@ -302,9 +303,9 @@ M.show_headers_body = function()
 end
 
 M.show_verbose = function()
-  local body = format_body()
+  local body, filetype = format_body("verbose")
   local errors = get_current_response().errors
-  show(errors .. "\n" .. body, "kulala_verbose_result", "verbose")
+  show(errors .. "\n" .. body, filetype, "verbose")
 end
 
 M.show_stats = function()
@@ -436,7 +437,11 @@ M.open_default_view = function()
   local default_view = CONFIG.get().default_view
   local open_view = type(default_view) == "function" and default_view or M["show_" .. default_view]
 
-  _ = open_view and open_view(get_current_response())
+  local status, errors = xpcall(function()
+    _ = open_view and open_view(get_current_response())
+  end, debug.traceback)
+
+  if not status then Logger.error("Errors displaying response: " .. (errors or ""), 1, { report = true }) end
 end
 
 M.open = function()

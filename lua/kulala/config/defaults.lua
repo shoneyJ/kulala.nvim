@@ -29,9 +29,16 @@ local M = {
 
   -- certificates
   certificates = {},
+
   -- Specify how to escape query parameters
   -- possible values: always, skipencoded = keep %xx as is
   urlencode = "always",
+
+  -- skip urlencoding characters, specified as lua regex pattern, e.g. "%[%]"
+  urlencode_skip = "",
+
+  -- force urlencoding characters, specified as lua regex pattern, e.g. "%[%]"
+  urlencode_force = "",
 
   -- Infer content type from the body and add it to the request headers
   infer_content_type = true,
@@ -47,8 +54,17 @@ local M = {
     },
     ["application/graphql"] = {
       ft = "graphql",
-      formatter = vim.fn.executable("prettier") == 1
-        and { "prettier", "--stdin-filepath", "graphql", "--parser", "graphql" },
+      formatter = vim.fn.executable("prettier") == 1 and { "prettier", "--stdin-filepath", "file.graphql" },
+      pathresolver = nil,
+    },
+    ["application/javascript"] = {
+      ft = "javascript",
+      formatter = vim.fn.executable("prettier") == 1 and { "prettier", "--stdin-filepath", "file.js" },
+      pathresolver = nil,
+    },
+    ["application/lua"] = {
+      ft = "lua",
+      formatter = vim.fn.executable("stylua") == 1 and { "stylua", "-" },
       pathresolver = nil,
     },
     ["application/graphql-response+json"] = "application/json",
@@ -59,7 +75,7 @@ local M = {
     },
     ["text/html"] = {
       ft = "html",
-      formatter = vim.fn.executable("xmllint") == 1 and { "xmllint", "--format", "--html", "-" },
+      formatter = vim.fn.executable("prettier") == 1 and { "prettier", "--stdin-filepath", "file.html" },
       pathresolver = nil,
     },
   },
@@ -67,8 +83,11 @@ local M = {
   -- format json response when redirecting to file
   format_json_on_redirect = true,
 
+  -- enable/disable/customize before_request hook.  Default hook is request highlight.
+  before_request = true, ---@type boolean|fun(request: DocumentRequest):boolean - return true to continue request execution, false to stop
+
   scripts = {
-    -- Resolves "NODE_PATH" environment variable for node scripts. Defaults to the first "node_modules" directory found upwards from "script_file_dir".
+    -- resolves "NODE_PATH" environment variable for node scripts. Defaults to the first "node_modules" directory found upwards from "script_file_dir".
     node_path_resolver = nil, ---@type fun(http_file_dir: string, script_file_dir: string, script_data: ScriptData): string|nil
   },
 
@@ -101,6 +120,9 @@ local M = {
       },
       lualine = "🐼",
       textHighlight = "WarningMsg", -- highlight group for request elapsed time
+      loadingHighlight = "Normal",
+      doneHighlight = "String",
+      errorHighlight = "ErrorMsg",
     },
 
     -- highlight groups for http syntax highlighting
@@ -178,6 +200,9 @@ local M = {
     -- enable/disable built-in LSP server
     enable = true,
 
+    -- filetypes to attach Kulala LSP to
+    filetypes = { "http", "rest", "json", "yaml", "bruno" },
+
     --enable/disable/customize  LSP keymaps
     ---@type boolean|table
     keymaps = false, -- disabled by default, as Kulala relies on default Neovim LSP keymaps
@@ -191,6 +216,7 @@ local M = {
         json = true,
       },
       quote_json_variables = true, -- add quotes around {{variable}} in JSON bodies
+      indent = 2, -- base indentation for scripts
     },
 
     on_attach = nil, -- function called when Kulala LSP attaches to the buffer
