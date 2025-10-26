@@ -167,7 +167,7 @@ local M = {
     disable_script_print_output = false,
 
     -- do not show responses over maximum size, in bytes
-    max_response_size = 102400,
+    max_response_size = 1024000,
 
     report = {
       -- possible values: true | false | "on_error"
