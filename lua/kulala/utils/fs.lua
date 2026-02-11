@@ -55,8 +55,8 @@ end
 
 ---Returns true if the path is absolute, false otherwise
 M.is_absolute_path = function(path)
-  if path:match("^/") or path:match("^%a:\\") then return true end
-  return false
+  -- Unix: /path, Windows: C:\ or C:/ (when shellslash is set)
+  return path:match("^/") or path:match("^%a:\\") or path:match("^%a:/")
 end
 
 ---Either returns the absolute path if the path is already absolute or
@@ -343,7 +343,7 @@ M.get_plugin_path = function(paths)
 end
 
 ---Read a file with path absolute or relative to buffer dir
----@param filename string path absolutre or relative to buffer dir
+---@param filename string path absolute or relative to buffer dir
 ---@param is_binary boolean|nil
 ---@return string|nil
 ---@usage local p = fs.read_file('Makefile')
